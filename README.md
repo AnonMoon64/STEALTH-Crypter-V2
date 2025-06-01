@@ -69,12 +69,12 @@ STEALTH Crypter encrypts and packages Windows executables into stealthy standalo
 4. **Set Icon (Optional)**:
    Select an icon (`.ico`, `.png`, etc.).
 5. **Configure Encryption**:
-   - Key: Default `7gj04wdg69kjkgd58bfte5yd9l9edaxzl`.
+   - Key: Default Random.
    - Junk URLs: 0-500 MB (default: 100).
    - Persistence: Enable for Startup.
    - In-Memory: Enable for no disk writes.
 6. **Encrypt**:
-   Click "Encrypt" to generate `output\encrypted_rat.exe`.
+   Click "Encrypt" to generate `output\encrypted.exe`.
 7. **Run Output**:
    ```bash
    cd output
