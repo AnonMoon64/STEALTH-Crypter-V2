@@ -365,14 +365,6 @@ class StealthGUI(QMainWindow):
         key_layout.addWidget(regen_button)
         encryption_layout.addLayout(key_layout)
 
-        junk_layout = QHBoxLayout()
-        junk_label = QLabel("Junk URLs Size (MB):")
-        self.junk_combo = QComboBox()
-        self.junk_combo.addItems(["0", "50", "100", "200", "300", "400", "500"])
-        self.junk_combo.setCurrentText("100")
-        junk_layout.addWidget(junk_label)
-        junk_layout.addWidget(self.junk_combo)
-        encryption_layout.addLayout(junk_layout)
         enc_persist_layout.addWidget(encryption_frame)
 
         # Persistence Settings
@@ -389,7 +381,7 @@ class StealthGUI(QMainWindow):
         self.persistence_combo.addItems([
             "None",
             "Startup Folder",
-            "Registry Run Key (Disabled)",
+            "Registry Run Key",
             "Scheduled Task (Disabled)",
             "Fileless (Disabled)"
         ])
@@ -412,6 +404,16 @@ class StealthGUI(QMainWindow):
         self.load_in_memory_check = QCheckBox("Execute in Memory")
         self.load_in_memory_check.setChecked(True)
         detection_layout.addWidget(self.load_in_memory_check)
+
+        junk_layout = QHBoxLayout()
+        junk_label = QLabel("Junk URLs Size (MB):")
+        self.junk_combo = QComboBox()
+        self.junk_combo.addItems(["0", "50", "100", "200", "300", "400", "500"])
+        self.junk_combo.setCurrentText("100")
+        junk_layout.addWidget(junk_label)
+        junk_layout.addWidget(self.junk_combo)
+        detection_layout.addLayout(junk_layout)
+
         main_layout.addWidget(detection_frame)
 
         # Section 6: Binding Settings
