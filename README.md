@@ -8,7 +8,7 @@ STEALTH Crypter encrypts and packages Windows executables into stealthy standalo
 - **Payload Encryption**: XOR encryption with a user-specified key.
 - **Execution Modes**:
   - On-disk: Decrypts and runs as a file.
-  - In-memory: Injects into `explorer.exe` without disk writes.
+  - In-memory without disk writes.
 - **Persistence**: Adds to Windows Startup folder.
 - **File Size Inflation**: Adds junk URLs (0-500 MB).
 - **Custom Icon**: Supports `.ico`, `.png`, `.jpg`, etc.
